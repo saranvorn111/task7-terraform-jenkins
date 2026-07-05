@@ -1,3 +1,3 @@
-key_name="foodexpress"
-
-public_key_path="~/.ssh/id_rsa.pub"
+instance_type = "t3.micro"
+aws_region    = "us-east-1"
+key_name      = "mykeypair"

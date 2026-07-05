@@ -1,15 +1,13 @@
-variable "region" {
-  default = "us-east-1"
-}
-
 variable "instance_type" {
+  type    = string
   default = "t2.micro"
 }
 
-variable "ami" {
-  default = "ami-084568db4383264d4"
+variable "aws_region" {
+  type = string
 }
-
-variable "key_name" {}
-
-variable "public_key_path" {}
+variable "key_name" {
+  description = "Existing AWS EC2 Key Pair"
+  type        = string
+  default     = "mykeypair"
+}
