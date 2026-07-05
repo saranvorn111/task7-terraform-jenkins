@@ -37,6 +37,7 @@ resource "aws_instance" "web_server" {
 
   ami           = "ami-0ec10929233384c7f"
   instance_type = var.instance_type
+  key_name      = var.key_name
 
   vpc_security_group_ids = [
     aws_security_group.web_sg.id
