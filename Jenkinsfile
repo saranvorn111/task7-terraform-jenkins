@@ -4,10 +4,7 @@ pipeline {
     environment {
         APP_NAME = "register"
         IMAGE_TAG = "latest"
-        FULL_IMAGE = "register:latest"
-
         TF_DIR = "terraform"
-
         AWS_REGION = "us-east-1"
     }
 
@@ -16,6 +13,16 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Verify Tools') {
+            steps {
+                sh '''
+                    docker --version
+                    terraform --version
+                    aws --version || true
+                '''
             }
         }
 
@@ -92,8 +99,7 @@ pipeline {
                 sh """
                     echo "Waiting for app..."
                     sleep 60
-
-                    curl --fail http://${EC2_IP}:3000 || true
+                    curl --fail http://${EC2_IP}:3000
                 """
             }
         }
@@ -101,10 +107,7 @@ pipeline {
 
     post {
         success {
-            echo """
-            PIPELINE SUCCESS
-            App URL: http://${EC2_IP}:3000
-            """
+            echo "PIPELINE SUCCESS - http://${EC2_IP}:3000"
         }
 
         failure {
