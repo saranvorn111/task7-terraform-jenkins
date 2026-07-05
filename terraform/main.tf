@@ -1,7 +1,3 @@
-provider "aws" {
-  region = var.aws_region
-}
-
 resource "aws_key_pair" "food" {
   key_name   = var.key_name
   public_key = file("${path.module}/keys/food-key.pub")
