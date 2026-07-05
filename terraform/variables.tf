@@ -9,5 +9,4 @@ variable "aws_region" {
 variable "key_name" {
   description = "Existing AWS EC2 Key Pair"
   type        = string
-  default     = "mykeypair"
 }
