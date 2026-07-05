@@ -1,153 +1,118 @@
 pipeline {
-
     agent any
 
     environment {
+        APP_NAME = "register"
+        IMAGE_TAG = "latest"
+        FULL_IMAGE = "register:latest"
 
-        IMAGE = "foodexpress"
+        TF_DIR = "terraform"
 
-        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
-
-        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
-
+        AWS_REGION = "us-east-1"
     }
 
     stages {
 
         stage('Checkout') {
-
             steps {
-
-                git 'https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git'
-
+                checkout scm
             }
-
         }
 
-        stage('Install') {
-
+        stage('Build Docker Image') {
             steps {
-
-                sh 'npm install'
-
+                sh """
+                    docker build -t ${APP_NAME}:${IMAGE_TAG} .
+                """
             }
-
-        }
-
-        stage('Docker Build') {
-
-            steps {
-
-                sh 'docker build -t ${IMAGE} .'
-
-            }
-
         }
 
         stage('Terraform Init') {
-
             steps {
-
-                dir('terraform') {
-
-                    sh 'terraform init'
-
+                dir("${TF_DIR}") {
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh "terraform init"
+                    }
                 }
-
             }
+        }
 
+        stage('Terraform Validate') {
+            steps {
+                dir("${TF_DIR}") {
+                    sh "terraform validate"
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir("${TF_DIR}") {
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh "terraform plan -out=tfplan"
+                    }
+                }
+            }
         }
 
         stage('Terraform Apply') {
-
             steps {
-
-                dir('terraform') {
-
-                    sh 'terraform apply -auto-approve'
-
+                dir("${TF_DIR}") {
+                    withCredentials([
+                        string(credentialsId: 'aws-access-key', variable: 'AWS_ACCESS_KEY_ID'),
+                        string(credentialsId: 'aws-secret-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    ]) {
+                        sh "terraform apply -auto-approve tfplan"
+                    }
                 }
-
             }
-
         }
 
         stage('Get Public IP') {
-
             steps {
-
                 script {
-
-                    env.PUBLIC_IP = sh(
-
-                        script: "cd terraform && terraform output -raw public_ip",
-
+                    env.EC2_IP = sh(
+                        script: "cd ${TF_DIR} && terraform output -raw public_ip",
                         returnStdout: true
-
                     ).trim()
 
+                    echo "EC2 IP: ${env.EC2_IP}"
                 }
-
             }
-
         }
 
-        stage('Deploy') {
-
+        stage('Health Check') {
             steps {
+                sh """
+                    echo "Waiting for app..."
+                    sleep 60
 
-                sshagent(['EC2_SSH_KEY']) {
-
-                    sh """
-
-                    ssh -o StrictHostKeyChecking=no ubuntu@${PUBLIC_IP} '
-
-                    sudo apt update
-
-                    sudo apt install docker.io -y
-
-                    sudo systemctl enable docker
-
-                    sudo systemctl start docker
-
-                    '
-
-                    """
-
-                    sh """
-
-                    scp -o StrictHostKeyChecking=no Dockerfile ubuntu@${PUBLIC_IP}:~
-
-                    """
-
-                    sh """
-
-                    scp -r . ubuntu@${PUBLIC_IP}:~/app
-
-                    """
-
-                    sh """
-
-                    ssh -o StrictHostKeyChecking=no ubuntu@${PUBLIC_IP} '
-
-                    cd ~/app
-
-                    sudo docker build -t foodexpress .
-
-                    sudo docker rm -f foodexpress || true
-
-                    sudo docker run -d -p 3000:3000 --name foodexpress foodexpress
-
-                    '
-
-                    """
-
-                }
-
+                    curl --fail http://${EC2_IP}:3000 || true
+                """
             }
-
         }
-
     }
 
+    post {
+        success {
+            echo """
+            PIPELINE SUCCESS
+            App URL: http://${EC2_IP}:3000
+            """
+        }
+
+        failure {
+            echo "PIPELINE FAILED"
+        }
+
+        always {
+            cleanWs()
+        }
+    }
 }
