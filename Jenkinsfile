@@ -135,7 +135,7 @@ pipeline {
                 }
             }
         }
-    }
+    
 
         stage('Health Check') {
             steps {
