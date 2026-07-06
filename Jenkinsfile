@@ -102,39 +102,32 @@ pipeline {
         }
 
         stage('Deploy Application') {
-            steps {
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'ec2-ssh',
-                        keyFileVariable: 'SSH_KEY',
-                        usernameVariable: 'SSH_USER'
-                    )
-                ]) {
+    steps {
+        withCredentials([
+            sshUserPrivateKey(
+                credentialsId: 'ec2-ssh',
+                keyFileVariable: 'SSH_KEY',
+                usernameVariable: 'SSH_USER'
+            )
+        ]) {
+            sh """
+                scp -i ${SSH_KEY} -o StrictHostKeyChecking=no -r ./* ${SSH_USER}@${EC2_IP}:~/app/
 
-                    sh """
-                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_USER}@${EC2_IP} 'mkdir -p ~/app'
+                ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${EC2_IP} '
+                    sudo apt update
+                    sudo apt install -y docker.io
+                    sudo systemctl enable docker
+                    sudo systemctl start docker
 
-                        scp -o StrictHostKeyChecking=no \
-                            -i ${SSH_KEY} \
-                            -r ./* \
-                            ${SSH_USER}@${EC2_IP}:~/app/
-
-                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_USER}@${EC2_IP} '
-                            cd ~/app
-
-                            sudo docker build -t register .
-
-                            sudo docker rm -f register || true
-
-                            sudo docker run -d \
-                                --name register \
-                                -p 3000:3000 \
-                                register
-                        '
-                    """
-                }
-            }
+                    cd ~/app
+                    sudo docker build -t register .
+                    sudo docker rm -f register || true
+                    sudo docker run -d --name register -p 3000:3000 register
+                '
+            """
         }
+    }
+}
     
 
         stage('Health Check') {
