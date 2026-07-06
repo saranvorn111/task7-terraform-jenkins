@@ -93,6 +93,41 @@ pipeline {
                 }
             }
         }
+        
+        stage('Wait for EC2') {
+            steps {
+                echo "Waiting 60 seconds for EC2 startup..."
+                sleep(time: 60, unit: 'SECONDS')
+            }
+        }
+
+        stage('Deploy Application') {
+                steps {
+                    withCredentials([
+                        sshUserPrivateKey(
+                            credentialsId: 'ec2-ssh',
+                            keyFileVariable: 'SSH_KEY',
+                            usernameVariable: 'SSH_USER'
+                        )
+                    ]) {
+                        sh """
+                            scp -i ${SSH_KEY} -o StrictHostKeyChecking=no -r ${APP_DIR}/* ${SSH_USER}@${EC2_IP}:~/app/
+
+                            ssh -i ${SSH_KEY} -o StrictHostKeyChecking=no ${SSH_USER}@${EC2_IP} '
+                                sudo apt update
+                                sudo apt install -y docker.io
+                                sudo systemctl enable docker
+                                sudo systemctl start docker
+
+                                cd ~/app
+                                sudo docker build -t register .
+                                sudo docker rm -f register || true
+                                sudo docker run -d --name register -p 5001:5001 register
+                            '
+                        """
+                }
+            }
+        }
 
         stage('Health Check') {
             steps {
